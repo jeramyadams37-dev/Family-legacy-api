@@ -1,33 +1,65 @@
-import os, subprocess, datetime
+import os, subprocess, datetime, sys
 
-# --- CONFIG ---
+# --- CONFIGURATION ---
 LEGACY_DIR = os.path.expanduser("~/harmony_legacy")
+BRANCH_NAME = "Family-legacy-keeper"
+
+def run_command(command, cwd=LEGACY_DIR):
+    """Runs a shell command and returns the output."""
+    try:
+        result = subprocess.run(
+            command, 
+            cwd=cwd, 
+            capture_output=True, 
+            text=True, 
+            check=True
+        )
+        return result.stdout.strip()
+    except subprocess.CalledProcessError as e:
+        return None
 
 def sync():
-    print("⏳ Checking Family Legacy Archives...")
+    print("⏳ The Weaver is inspecting the archives...")
     
-    # Check for changes
-    status = subprocess.run(["git", "status", "--porcelain"], cwd=LEGACY_DIR, capture_output=True, text=True)
+    # 1. Check for changes (New files or modified files)
+    status = run_command(["git", "status", "--porcelain"])
     
-    if status.stdout.strip():
-        print("🚀 New memories detected. Preserving to GitHub...")
-        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+    if not status:
+        print("✨ Legacy is pristine. No new memories to save.")
+        return
+
+    print("🚀 New memories detected! Initiating preservation protocol...")
+    
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+    
+    try:
+        # 2. Stage all files (Add everything)
+        print("   - Staging artifacts...")
+        run_command(["git", "add", "."])
         
-        try:
-            # Add all changes
-            subprocess.run(["git", "add", "."], cwd=LEGACY_DIR, check=True)
+        # 3. Commit the changes
+        print(f"   - Committing to log: 'Legacy Update {timestamp}'...")
+        run_command(["git", "commit", "-m", f"Legacy Update: {timestamp}"])
+        
+        # 4. Push to GitHub
+        print(f"   - Beaming to cloud (Branch: {BRANCH_NAME})...")
+        # We use run_command here but capture stderr in case of issues
+        push_cmd = subprocess.run(
+            ["git", "push", "origin", BRANCH_NAME], 
+            cwd=LEGACY_DIR, 
+            capture_output=True, 
+            text=True
+        )
+        
+        if push_cmd.returncode == 0:
+            print("✅ SUCCESS: Legacy Secure in Cloud.")
+        else:
+            print("⚠️ PUSH ERROR: The cloud rejected the update.")
+            print("Error details:")
+            print(push_cmd.stderr)
             
-            # Commit
-            subprocess.run(["git", "commit", "-m", f"Legacy Update: {timestamp}"], cwd=LEGACY_DIR, check=True)
-            
-            # Push specifically to your legacy branch
-            subprocess.run(["git", "push", "origin", "Family-legacy-keeper"], cwd=LEGACY_DIR, check=True)
-            
-            print("✅ Legacy Secure in Cloud.")
-        except Exception as e:
-            print(f"⚠️ Backup Failed: {e}")
-    else:
-        print("✨ Legacy is up to date.")
+    except Exception as e:
+        print(f"❌ CRITICAL FAILURE: {e}")
 
 if __name__ == "__main__":
     sync()
