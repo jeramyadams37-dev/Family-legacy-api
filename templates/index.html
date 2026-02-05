@@ -1,0 +1,226 @@
+<!doctype html>
+<html>
+<head>
+    <title>Harmony Legacy Keeper</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        :root { --gold: #d4af37; --slate: #1e2124; --text: #e0e0e0; --panel: #282b30; }
+        body { background: var(--slate); color: var(--text); font-family: 'Georgia', serif; margin: 0; padding: 20px; }
+        a { text-decoration: none; color: inherit; }
+        .header { text-align: center; border-bottom: 2px solid var(--gold); padding-bottom: 20px; margin-bottom: 30px; }
+        
+        /* SEARCH BAR */
+        .search-box { width: 100%; max-width: 800px; margin: 0 auto 20px auto; display: flex; }
+        .search-input { flex-grow: 1; background: #000; border: 1px solid var(--gold); color: #fff; padding: 10px; font-family: monospace; }
+        .search-btn { background: var(--gold); border: none; padding: 0 20px; font-weight: bold; cursor: pointer; }
+
+        /* FLASHBACK WIDGET */
+        .flashback-zone { max-width: 800px; margin: 0 auto 30px auto; border: 1px dashed var(--gold); padding: 15px; background: #222; display: none; }
+        .flashback-zone.active { display: block; animation: fadeIn 2s; }
+        .flashback-title { color: var(--gold); font-weight: bold; text-transform: uppercase; margin-bottom: 10px; display: block; }
+        
+        /* TIMELINE */
+        .timeline { position: relative; max-width: 800px; margin: 0 auto; }
+        .timeline::after { content: ''; position: absolute; width: 2px; background-color: var(--gold); top: 0; bottom: 0; left: 20px; margin-left: -1px; }
+        .year-marker { background: var(--gold); color: #000; padding: 5px 15px; font-weight: bold; font-size: 1.2em; border-radius: 4px; display: inline-block; margin: 30px 0 15px 40px; }
+        .month-marker { color: var(--gold); font-family: 'Courier New', monospace; margin: 10px 0 10px 45px; text-transform: uppercase; }
+        
+        .memory-card { background: var(--panel); border: 1px solid #444; padding: 15px; margin: 10px 0 20px 50px; border-left: 4px solid var(--gold); display: block; }
+        .locked-card { border-left: 4px solid #ff4444; opacity: 0.8; }
+        
+        /* INPUT ZONE */
+        .input-zone { max-width: 800px; margin: 0 auto 40px auto; background: #1a1a1a; padding: 20px; border: 1px solid #333; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+        textarea, input[type="text"], input[type="date"] { width: 100%; background: #000; color: #fff; border: 1px solid #333; padding: 10px; margin-bottom: 10px; box-sizing: border-box; }
+        
+        .upload-btn-wrapper { position: relative; overflow: hidden; display: inline-block; width: 100%; margin-bottom: 10px; }
+        .btn-file { border: 2px dashed var(--gold); color: var(--gold); background-color: transparent; padding: 10px; width: 100%; font-weight: bold; cursor: pointer; text-align: center; }
+        .upload-btn-wrapper input[type=file] { font-size: 100px; position: absolute; left: 0; top: 0; opacity: 0; cursor: pointer; }
+        
+        .capsule-opt { border: 1px solid #555; padding: 10px; margin-bottom: 10px; background: #222; }
+        button.submit-btn { background: var(--gold); border: none; padding: 12px; width: 100%; font-weight: bold; cursor: pointer; color: #000; text-transform: uppercase; letter-spacing: 1px; }
+
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <img src="/raw/assets/logo.png" style="max-width: 80%; max-height: 200px; border: 2px solid #d4af37; margin-bottom: 15px;">
+        <div class="subtitle" style="color:#888; font-family:monospace;">
+            {% if guest %}GUEST MODE • READ ONLY{% else %}VOLUME V • THE OMNI ARCHIVE{% endif %}
+        </div>
+    </div>
+
+    <form class="search-box" method="GET" action="/">
+        {% if guest %}<input type="hidden" name="guest" value="1">{% endif %}
+        <input type="text" name="q" class="search-input" placeholder="Search memories..." value="{{ query }}">
+        <button type="submit" class="search-btn">🔍</button>
+    </form>
+
+    {% if flashbacks %}
+    <div class="flashback-zone active">
+        <span class="flashback-title">✨ ON THIS DAY IN HISTORY</span>
+        {% for f in flashbacks %}
+            <a href="/view/{{ f.folder }}/{{ f.name }}" style="display:block; padding:5px; border-bottom:1px solid #333;">
+                {{ f.icon }} <b>{{ f.clean_name }}</b> ({{ f.year }})
+            </a>
+        {% endfor %}
+    </div>
+    {% endif %}
+    
+    {% if not guest %}
+    <div class="input-zone">
+        <form method="POST" action="/add" enctype="multipart/form-data">
+            <input type="text" name="tag" placeholder="Title / Family Member" required>
+            <textarea name="content" placeholder="Write a story..."></textarea>
+            <div class="upload-btn-wrapper">
+                <div class="btn-file">📎 ATTACH PHOTO / VIDEO</div>
+                <input type="file" name="file">
+            </div>
+            <div class="capsule-opt">
+                <span style="color:#f39c12; font-weight:bold;">🔒 TIME CAPSULE (Optional)</span>
+                <input type="date" name="unlock_date">
+            </div>
+            <button type="submit" class="submit-btn">Record to Vault</button>
+        </form>
+    </div>
+    {% endif %}
+
+    <div class="timeline">
+        {% for g in timeline %}
+            {% if g.type == 'year' %}<div class="year-marker">{{ g.val }}</div>
+            {% elif g.type == 'month' %}<div class="month-marker">{{ g.val }}</div>
+            {% else %}
+                <a href="/view/{{ g.folder }}/{{ g.name }}" class="memory-card {% if g.locked %}locked-card{% endif %}">
+                    <div style="float:right; font-size:1.5em">{{ g.icon }}</div>
+                    <span style="font-weight:bold; display:block">{{ g.clean_name }}</span>
+                    <div style="font-size:0.8em; color:#888; font-style:italic">
+                        {{ g.date }} • {{ g.tag }} 
+                        {% if g.locked %}<span style="color:#ff4444; font-weight:bold; margin-left:5px;">(LOCKED)</span>{% endif %}
+                    </div>
+                </a>
+            {% endif %}
+        {% endfor %}
+    </div>
+
+    <style>
+        /* Floating Action Button */
+        .chat-fab {
+            position: fixed; bottom: 20px; right: 20px;
+            width: 60px; height: 60px;
+            background: var(--gold); color: #000;
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+            font-size: 24px; z-index: 1000;
+            transition: transform 0.2s;
+        }
+        .chat-fab:hover { transform: scale(1.1); }
+
+        /* Main Chat Window */
+        .chat-window {
+            display: none; /* Hidden by default */
+            position: fixed; bottom: 90px; right: 20px;
+            width: 350px; height: 500px;
+            background: #1e1e1e; color: #d4d4d4;
+            border: 1px solid #333; border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            z-index: 1000; flex-direction: column;
+            font-family: monospace;
+        }
+        
+        /* Header */
+        .chat-header {
+            padding: 15px; border-bottom: 1px solid #333;
+            background: #252526; border-radius: 12px 12px 0 0;
+            display: flex; align-items: center; gap: 10px;
+        }
+        .chat-title { font-weight: bold; color: #fff; }
+        
+        /* Messages Area */
+        .chat-messages {
+            flex: 1; padding: 15px; overflow-y: auto;
+            display: flex; flex-direction: column; gap: 10px;
+        }
+        
+        /* Message Bubbles */
+        .msg { padding: 8px 12px; border-radius: 8px; max-width: 80%; font-size: 0.9em; }
+        .msg-user { align-self: flex-end; background: var(--gold); color: #000; }
+        .msg-bot { align-self: flex-start; background: #333; color: #fff; }
+        
+        /* Input Area */
+        .chat-input-area {
+            padding: 15px; border-top: 1px solid #333;
+            background: #252526; border-radius: 0 0 12px 12px;
+            display: flex; gap: 10px;
+        }
+        .chat-input {
+            flex: 1; background: #1e1e1e; border: 1px solid #333;
+            color: #fff; padding: 8px; border-radius: 4px;
+        }
+        .chat-send {
+            background: var(--gold); border: none; padding: 8px 15px;
+            cursor: pointer; font-weight: bold; border-radius: 4px;
+        }
+    </style>
+
+    <div class="chat-fab" onclick="toggleChat()">💬</div>
+
+    <div class="chat-window" id="chatWindow">
+        <div class="chat-header">
+            <div>🤖</div>
+            <div class="chat-title">AI Harmony Legacy Keeper</div>
+        </div>
+        <div class="chat-messages" id="chatMsgs">
+            <div class="msg msg-bot">I am the Guardian. The archives are secure.</div>
+        </div>
+        <div class="chat-input-area">
+            <input type="text" class="chat-input" id="chatInput" placeholder="Ask the vault..." onkeypress="handleKey(event)">
+            <button class="chat-send" onclick="sendMessage()">SEND</button>
+        </div>
+    </div>
+
+    <script>
+        function toggleChat() {
+            var w = document.getElementById("chatWindow");
+            w.style.display = (w.style.display === "none" || w.style.display === "") ? "flex" : "none";
+        }
+
+        function handleKey(e) {
+            if(e.key === 'Enter') sendMessage();
+        }
+
+        function sendMessage() {
+            var input = document.getElementById("chatInput");
+            var txt = input.value;
+            if(!txt) return;
+
+            // Add User Message
+            addMsg(txt, 'msg-user');
+            input.value = "";
+
+            // Send to Python Backend
+            fetch('/chat', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({message: txt})
+            })
+            .then(r => r.json())
+            .then(data => {
+                addMsg(data.reply, 'msg-bot');
+            })
+            .catch(err => {
+                addMsg("Error contacting the Vault.", 'msg-bot');
+            });
+        }
+
+        function addMsg(txt, cls) {
+            var div = document.createElement("div");
+            div.className = "msg " + cls;
+            div.innerHTML = txt;
+            document.getElementById("chatMsgs").appendChild(div);
+            var area = document.getElementById("chatMsgs");
+            area.scrollTop = area.scrollHeight;
+        }
+    </script>
+</body>
+</html>

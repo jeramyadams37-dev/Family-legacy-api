@@ -1,0 +1,58 @@
+<!doctype html>
+<html>
+<head>
+    <title>Memory Viewer</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <style>
+        body { background: #1a1a1a; display: flex; justify-content: center; padding: 20px; margin: 0; min-height: 100vh; }
+        .paper {
+            background: #fdf6e3; color: #3b3b3b; font-family: 'Georgia', serif;
+            line-height: 1.8; padding: 40px; max-width: 700px; width: 100%;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5); position: relative;
+        }
+        .paper::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 5px; background: #d4af37; }
+        
+        .vault-lock { text-align: center; padding: 50px; background: #101010; 
+                      border: 6px double #d4af37; box-shadow: inset 0 0 50px #000; 
+                      max-width: 500px; width: 100%; }
+        
+        .lock-msg { color: #f39c12; font-family: monospace; font-size: 1.2em; text-shadow: 0 0 10px #d35400; }
+        
+        h1 { font-size: 1.8em; margin-top: 0; border-bottom: 1px solid #d4af37; padding-bottom: 15px; color: #2c2c2c; }
+        .meta { font-family: 'Courier New', monospace; color: #888; font-size: 0.8em; margin-bottom: 30px; }
+        .content { font-size: 1.15em; white-space: pre-wrap; margin-top: 20px; }
+        .back-btn { display: inline-block; margin-bottom: 20px; color: #d4af37; text-decoration: none; font-family: monospace; }
+        img, video, audio { max-width: 100%; margin-top: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); border-radius: 4px; }
+    </style>
+</head>
+<body>
+    <div style="width:100%">
+        <a href="/" class="back-btn">ᐸ RETURN TO VAULT</a>
+        
+        {% if locked %}
+            <div style="display:flex; justify-content:center;">
+                <div class="vault-lock">
+                    <img src="/raw/assets/vault_lock.png" style="display: block; margin: 0 auto 25px auto; width: 250px; border: 4px solid #d4af37; border-radius: 15px; box-shadow: 0 0 120px 40px #000;">
+                    <h2 style="color:#d4af37; text-transform:uppercase;">Time Capsule Sealed</h2>
+                    <p style="color:#888;">This memory is locked until:</p>
+                    <p class="lock-msg">{{ unlock_date }}</p>
+                </div>
+            </div>
+        {% else %}
+            <div class="paper">
+                <h1>{{ tag }}</h1>
+                <div class="meta">{{ timestamp }}</div>
+                
+                {% if type == 'img' %}
+                    <img src="/raw/{{ folder }}/{{ filename }}">
+                {% elif type == 'video' %}
+                    <video controls><source src="/raw/{{ folder }}/{{ filename }}" type="video/mp4"></video>
+                {% elif type == 'audio' %}
+                    <audio controls style="width:100%"><source src="/raw/{{ folder }}/{{ filename }}"></audio>
+                {% endif %}
+                
+                <div class="content">{{ text_content }}</div>
+            </div>
+        {% endif %}
+    </div>
+</body></html>

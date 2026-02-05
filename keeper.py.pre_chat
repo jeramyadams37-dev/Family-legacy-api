@@ -1,0 +1,176 @@
+from flask import Flask, request, redirect, render_template, send_from_directory
+import os, json, datetime
+from werkzeug.utils import secure_filename
+
+app = Flask(__name__)
+BASE_DIR = os.path.expanduser("~/harmony_legacy")
+VAULT_DIR, STAGING_DIR, ASSETS_DIR = [os.path.join(BASE_DIR, x) for x in ["vault", "staging", "vault/assets"]]
+
+# --- CONFIG ---
+ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'mp4', 'mp3', 'wav', 'pdf'}
+for d in [STAGING_DIR, VAULT_DIR, ASSETS_DIR]:
+    if not os.path.exists(d): os.makedirs(d)
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+# --- THEME & UI ---
+# HTML moved to templates/index.html
+
+# VIEWER (With Golden Vault Door Logic)
+# VIEWER_HTML moved to templates/viewer.html
+
+def get_data(query=None):
+    files = []
+    now = datetime.datetime.now()
+    now_str = now.strftime("%Y-%m-%d")
+    
+    for d, folder in [(VAULT_DIR, 'vault'), (STAGING_DIR, 'staging'), (ASSETS_DIR, 'assets')]:
+        if not os.path.exists(d): continue
+        for f in os.listdir(d):
+            if f.startswith('.'): continue
+            path = os.path.join(d, f)
+            if os.path.isdir(path): continue
+            
+            ts = os.path.getmtime(path)
+            dt = datetime.datetime.fromtimestamp(ts)
+            tag = "Legacy"
+            locked = False
+            
+            # Read Metadata
+            if f.endswith('.json'):
+                try: 
+                    with open(path) as jf: 
+                        meta = json.load(jf)
+                        tag = meta.get('tag', 'Legacy')
+                        unlock_date = meta.get('unlock_date', '')
+                        if unlock_date and unlock_date > now_str: locked = True
+                except: pass
+            
+            # SEARCH FILTER
+            if query:
+                # Simple check: is query in filename or tag?
+                q_clean = query.lower()
+                if q_clean not in f.lower() and q_clean not in tag.lower():
+                    continue
+
+            icon = "🔒" if locked else ("🖼️" if f.endswith(('.jpg','.png','.jpeg')) else "📜")
+            files.append({
+                "name": f, "folder": folder, "ts": ts, "date": dt, "year": dt.strftime("%Y"), 
+                "clean_name": f.replace('.json','').replace('_',' '), "icon": icon, "tag": tag, "locked": locked
+            })
+            
+    return sorted(files, key=lambda x: x['ts'], reverse=True)
+
+@app.route('/')
+def index():
+    query = request.args.get('q', '')
+    is_guest = request.args.get('guest')
+    
+    all_files = get_data(query)
+    
+    # Timeline Logic
+    timeline = []
+    curr_y, curr_m = None, None
+    for f in all_files:
+        y, m = f['date'].strftime("%Y"), f['date'].strftime("%B")
+        if y != curr_y: timeline.append({"type":"year", "val":y}); curr_y = y; curr_m = None
+        if m != curr_m: timeline.append({"type":"month", "val":m}); curr_m = m
+        timeline.append(f)
+        
+    # Flashback Logic
+    today_md = datetime.datetime.now().strftime("%m-%d")
+    flashbacks = [f for f in all_files if f['date'].strftime("%m-%d") == today_md and f['year'] != datetime.datetime.now().strftime("%Y")]
+    
+    return render_template('index.html', timeline=timeline, query=query, flashbacks=flashbacks, guest=is_guest)
+
+@app.route('/view/<folder>/<filename>')
+def view(folder, filename):
+    d = STAGING_DIR if folder=='staging' else (ASSETS_DIR if folder=='assets' else VAULT_DIR)
+    p = os.path.join(d, filename)
+    if not os.path.exists(p): return "File not found"
+    
+    # --- LOCK CHECK ---
+    now_str = datetime.datetime.now().strftime("%Y-%m-%d")
+    is_locked = False
+    unlock_date = ""
+    
+    sidecar_path = p + ".json"
+    if os.path.exists(sidecar_path):
+        try:
+            with open(sidecar_path) as jf:
+                meta = json.load(jf)
+                unlock_date = meta.get('unlock_date', '')
+                if unlock_date and unlock_date > now_str: is_locked = True
+        except: pass
+    if filename.endswith('.json'):
+        try:
+            with open(p) as jf:
+                meta = json.load(jf)
+                unlock_date = meta.get('unlock_date', '')
+                if unlock_date and unlock_date > now_str: is_locked = True
+        except: pass
+
+    if is_locked:
+        return render_template('viewer.html', locked=True, unlock_date=unlock_date)
+
+    # VIEW LOGIC
+    ftype = 'text'
+    if filename.lower().endswith(('.jpg','.png','.jpeg')): ftype = 'img'
+    elif filename.lower().endswith('.mp4'): ftype = 'video'
+    elif filename.lower().endswith(('.mp3','.wav')): ftype = 'audio'
+    
+    content, tag, timestamp = "", filename, datetime.datetime.fromtimestamp(os.path.getmtime(p)).strftime("%Y-%m-%d %H:%M")
+    if filename.endswith('.json'):
+        try:
+            with open(p) as f:
+                data = json.load(f)
+                content, tag, timestamp = data.get('content', ''), data.get('tag', 'Entry'), data.get('timestamp', timestamp)
+        except: pass
+        
+    return render_template('viewer.html', type=ftype, text_content=content, tag=tag, timestamp=timestamp, folder=folder, filename=filename, locked=False)
+
+@app.route('/raw/<folder>/<filename>')
+def raw(folder, filename):
+    d = STAGING_DIR if folder=='staging' else (ASSETS_DIR if folder=='assets' else VAULT_DIR)
+    return send_from_directory(d, filename)
+
+@app.route('/add', methods=['POST'])
+def add():
+    t, c, unlock, file = request.form.get('tag'), request.form.get('content'), request.form.get('unlock_date'), request.files.get('file')
+    ts = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    
+    if file and file.filename and allowed_file(file.filename):
+        saved_filename = f"{ts}_{secure_filename(file.filename)}"
+        file.save(os.path.join(STAGING_DIR, saved_filename))
+        with open(os.path.join(STAGING_DIR, f"{saved_filename}.json"), 'w') as f:
+            json.dump({"timestamp":ts, "tag":t, "content":c, "unlock_date": unlock}, f)
+    elif c:
+        with open(os.path.join(STAGING_DIR, f"{ts}_{t.replace(' ','-')}.json"), 'w') as f:
+            json.dump({"timestamp":ts, "tag":t, "content":c, "unlock_date": unlock}, f)
+    return redirect('/')
+
+
+# --- VAULT GUARDIAN AI ---
+@app.route('/chat', methods=['POST'])
+def chat_guardian():
+    data = request.json
+    user_msg = data.get('message', '').lower()
+    
+    # 1. Simple Logic (Smarter Not Harder)
+    response = "The Vault is listening."
+    
+    if "hello" in user_msg:
+        response = "Greetings. I am the Guardian of this Legacy. How may I assist?"
+    elif "search" in user_msg or "find" in user_msg:
+        response = "To search the archives, use the search bar at the top of the vault."
+    elif "password" in user_msg:
+        response = "Security protocols are active. The Vault is secure."
+    else:
+        response = f"I have logged your query: '{user_msg}'. Future upgrades will allow me to answer fully."
+
+    return jsonify({"reply": response})
+
+
+if __name__ == "__main__":
+    app.run(host='0.0.0.0', port=8080)
