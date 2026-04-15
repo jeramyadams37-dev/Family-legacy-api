@@ -1,49 +1,52 @@
-import os
-import subprocess
-import datetime
-import shutil
+import os, subprocess, datetime, shutil, json
 
-# --- CONFIGURATION (References your existing structure) ---
+# --- CONFIGURATION ---
 BASE_DIR = os.path.expanduser("~/harmony_legacy")
 BACKUP_DIR = os.path.join(BASE_DIR, "backups")
 STAGING_DIR = os.path.join(BASE_DIR, "staging")
 
+def print_banner(text):
+    print(f"\n{'='*50}\n{text}\n{'='*50}")
+
 def run_backup():
-    """Requirement: Implement backups before code/data is altered."""
     if not os.path.exists(BACKUP_DIR): os.makedirs(BACKUP_DIR)
     stamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     archive_name = os.path.join(BACKUP_DIR, f"pre_sync_backup_{stamp}")
     shutil.make_archive(archive_name, 'zip', STAGING_DIR)
-    print(f"✅ Backup created: {archive_name}.zip")
+    print(f"✅ SAFETY SNAPSHOT: {archive_name}.zip")
 
 def invoke_claude_artisan():
-    """Requirement: Integrate Claude Code tool for documentation/recall."""
-    print("🤖 Calling Claude Code for Legacy Documentation...")
-    # This instructs Claude Code to analyze your data and write a summary
-    # without changing your Python scripts.
+    print_banner("🤖 ARTISAN PROTOCOL: GENERATING RECALL LEDGER")
     prompt = (
         "Analyze the .json files in ~/harmony_legacy/staging. "
-        "Create a summary report in ~/harmony_legacy/staging/CLAUDE_RECALL.md "
-        "indexing all names, dates, and themes for long-term memory recall."
+        "Create a detailed index of all memories, family members (Cadence, Addy), "
+        "and locations (Springfield Walmart, etc.). "
+        "SAVE THIS DATA as a JSON object in ~/harmony_legacy/staging/CLAUDE_RECALL.json. "
+        "Format exactly as: "
+        '{"tag": "Recall Ledger", "content": "## 📜 ARCHIVE SUMMARY\\n\\n[Markdown content here]"}'
     )
     try:
         subprocess.run(["claude", "run", prompt], check=True)
-        print("✅ Claude has updated the Recall Ledger.")
+        # Cleanup the incompatible .md quirk
+        old_md = os.path.join(STAGING_DIR, "CLAUDE_RECALL.md")
+        if os.path.exists(old_md):
+            os.remove(old_md)
+            print("🧹 CLEANUP: Incompatible .md file removed.")
+        print("✅ LEDGER UPDATED: Recall ready for Keeper UI.")
     except Exception as e:
-        print(f"⚠️ Claude Code call failed: {e}. (Ensure 'claude' CLI is installed)")
+        print(f"⚠️ ARTISAN ERROR: {e}")
 
 def run_weaver():
-    """Requirement: Execute original Weaver without modification."""
-    print("🕸️ Initiating original Weaver sync...")
+    print_banner("🕸️ WEAVER PROTOCOL: CLOUD PRESERVATION")
     try:
-        # Runs your existing weaver.py as a separate process
         subprocess.run(["python", "weaver.py"], cwd=BASE_DIR, check=True)
+        print("✅ SYNC COMPLETE: GitHub updated.")
     except Exception as e:
-        print(f"❌ Weaver Sync failed: {e}")
+        print(f"❌ WEAVER ERROR: {e}")
 
 if __name__ == "__main__":
-    print("--- HARMONY CONDUCTOR: VOLUME VI ---")
-    run_backup()            # 1. Safety first
-    invoke_claude_artisan() # 2. Smart documentation
-    run_weaver()            # 3. Preservation
-    print("--- PROTOCOL COMPLETE ---")
+    print_banner("HARMONY CONDUCTOR: VOLUME VI - FINAL")
+    run_backup()
+    invoke_claude_artisan()
+    run_weaver()
+    print_banner("PROTOCOL COMPLETE")
